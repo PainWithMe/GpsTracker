@@ -241,7 +241,7 @@ class MainFragment : Fragment() {
         return TrackItem(
             null,
             System.currentTimeMillis() - startTime,
-            System.currentTimeMillis(),
+            TimeUtils.getCurrentTimeInMillis(),
             locationModel?.distance ?: 0.0f,
             getAverageSpeed(locationModel?.distance ?: 0.0f),
             geoPointsToString(locationModel?.geoPointsList ?: listOf()),

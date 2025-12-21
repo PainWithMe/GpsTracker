@@ -1,7 +1,12 @@
 package com.dscreate_app.gpstracker.viewModels
 
 import androidx.lifecycle.*
-import com.dscreate_app.gpstracker.database.*
+import com.dscreate_app.gpstracker.database.ActivityCount
+import com.dscreate_app.gpstracker.database.ActivityCalories
+import com.dscreate_app.gpstracker.database.DatePoints
+import com.dscreate_app.gpstracker.database.MainDb
+import com.dscreate_app.gpstracker.database.TrackItem
+import com.dscreate_app.gpstracker.database.UserProfile
 import com.dscreate_app.gpstracker.location.LocationModel
 import kotlinx.coroutines.launch
 
@@ -56,5 +61,13 @@ class MainViewModel(db: MainDb): ViewModel() {
     // Bar Chart by date
     fun getTracksForPeriod(activityType: String, startDate: Long, endDate: Long): LiveData<List<TrackItem>> {
         return dao.getTracksForPeriod(activityType, startDate, endDate).asLiveData()
+    }
+
+    // Calories Breakdown
+    fun getCaloriesByActivity(): LiveData<List<ActivityCalories>> = dao.getCaloriesByActivity().asLiveData()
+
+    // Calories Bar Chart by date
+    fun getCaloriesByDate(activityType: String, startDate: Long, endDate: Long): LiveData<List<DatePoints>> {
+        return dao.getCaloriesByDate(activityType, startDate, endDate).asLiveData()
     }
 }

@@ -82,4 +82,12 @@ interface Dao {
     // Query for Bar Chart by date
     @Query("SELECT * FROM track WHERE activity_type = :activityType AND date BETWEEN :startDate AND :endDate")
     fun getTracksForPeriod(activityType: String, startDate: Long, endDate: Long): Flow<List<TrackItem>>
+
+    // Query for Calories Breakdown
+    @Query("SELECT activity_type as activityType, SUM(calories) as totalCalories FROM track GROUP BY activity_type")
+    fun getCaloriesByActivity(): Flow<List<ActivityCalories>>
+
+    // Queries for Calories Bar Chart by date
+    @Query("SELECT strftime('%Y-%m-%d', date / 1000, 'unixepoch') as date, SUM(calories) as distance FROM track WHERE activity_type = :activityType AND date BETWEEN :startDate AND :endDate GROUP BY date")
+    fun getCaloriesByDate(activityType: String, startDate: Long, endDate: Long): Flow<List<DatePoints>>
 }

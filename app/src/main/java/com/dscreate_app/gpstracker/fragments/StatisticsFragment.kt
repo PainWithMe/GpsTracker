@@ -8,6 +8,7 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
+import androidx.core.view.isVisible
 import androidx.fragment.app.activityViewModels
 import com.dscreate_app.gpstracker.R
 import com.dscreate_app.gpstracker.database.MainApp
@@ -15,6 +16,7 @@ import com.dscreate_app.gpstracker.databinding.FragmentStatisticsBinding
 import com.dscreate_app.gpstracker.utils.TimeUtils
 import com.dscreate_app.gpstracker.viewModels.MainViewModel
 import com.dscreate_app.gpstracker.viewModels.ViewModelFactory
+import com.github.mikephil.charting.charts.BarChart
 import com.github.mikephil.charting.components.XAxis
 import com.github.mikephil.charting.data.*
 import com.github.mikephil.charting.formatter.IndexAxisValueFormatter
@@ -89,11 +91,17 @@ class StatisticsFragment : Fragment() {
         if (activityType == null) {
             binding.toggleDateFilter.visibility = View.GONE
             binding.barChart.visibility = View.VISIBLE
+            binding.barChartCalories.visibility = View.VISIBLE
+            binding.barChartCaloriesTitle.visibility = View.VISIBLE
             observeActivityCountChart()
+            observeCaloriesByActivityChart()
         } else {
             binding.toggleDateFilter.visibility = View.VISIBLE
             binding.barChart.visibility = View.VISIBLE
+            binding.barChartCalories.visibility = View.VISIBLE
+            binding.barChartCaloriesTitle.visibility = View.VISIBLE
             binding.barChart.clear()
+            binding.barChartCalories.clear()
             binding.toggleDateFilter.check(R.id.buttonWeek)
             observeBarChartForActivity(activityType, "week")
         }
@@ -166,136 +174,155 @@ class StatisticsFragment : Fragment() {
                 BarEntry(index.toFloat(), activityCount.count.toFloat())
             }
             val labels = activityData.map { it.activityType.replace(" ", "\n") }
-
             val dataSet = BarDataSet(entries, "").apply {
-                colors = ColorTemplate.MATERIAL_COLORS.toList()
                 valueFormatter = object : ValueFormatter() {
                     override fun getFormattedValue(value: Float): String {
                         return if (value == 0f) "" else value.toInt().toString()
                     }
                 }
-                valueTextSize = 12f
             }
-            val data = BarData(dataSet)
-            binding.barChart.apply {
-                this.data = data
-                description.isEnabled = false
-                legend.isEnabled = false
-                animateY(1000)
+            setupBarChart(binding.barChart, BarData(dataSet), labels)
+        }
+    }
 
-                xAxis.apply {
-                    valueFormatter = IndexAxisValueFormatter(labels)
-                    position = XAxis.XAxisPosition.BOTTOM
-                    granularity = 1f
-                    setDrawGridLines(false)
-                    labelRotationAngle = 0f
-                    labelCount = labels.size
-                }
-                axisLeft.apply {
-                    setDrawGridLines(false)
-                    axisMinimum = 0f
-                }
-                axisRight.isEnabled = false
-                setExtraBottomOffset(40f)
-                invalidate()
+    private fun observeCaloriesByActivityChart() {
+        binding.barChartCaloriesTitle.text = "Калории по активностям"
+        viewModel.getCaloriesByActivity().observe(viewLifecycleOwner) { caloriesData ->
+            if (caloriesData.isNullOrEmpty()) {
+                binding.barChartCalories.clear()
+                binding.barChartCalories.invalidate()
+                return@observe
             }
+            val entries = caloriesData.mapIndexed { index, activityCalories ->
+                BarEntry(index.toFloat(), activityCalories.totalCalories)
+            }
+            val labels = caloriesData.map { it.activityType.replace(" ", "\n") }
+            val dataSet = BarDataSet(entries, "").apply {
+                valueFormatter = object : ValueFormatter() {
+                    override fun getFormattedValue(value: Float): String {
+                        return if (value == 0f) "" else value.toInt().toString()
+                    }
+                }
+            }
+            setupBarChart(binding.barChartCalories, BarData(dataSet), labels)
         }
     }
 
     private fun observeBarChartForActivity(activityType: String, period: String) {
-        val title = "Активность за ${if (period == "week") "неделю" else if (period == "month") "месяц" else "год"}"
+        val title = "Дистанция за ${if (period == "week") "неделю" else if (period == "month") "месяц" else "год"}"
         binding.barChartTitle.text = title
+        val caloriesTitle = "Калории за ${if (period == "week") "неделю" else if (period == "month") "месяц" else "год"}"
+        binding.barChartCaloriesTitle.text = caloriesTitle
 
-        when (period) {
-            "week" -> {
-                val (startDate, endDate) = getWeekPeriod()
-                viewModel.getTracksForPeriod(activityType, startDate, endDate).observe(viewLifecycleOwner) { tracks ->
-                    val calendar = Calendar.getInstance()
-                    val dbDateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                    val dateList = (0 until 7).map {
-                        calendar.timeInMillis = startDate
-                        calendar.add(Calendar.DAY_OF_YEAR, it)
-                        dbDateFormat.format(calendar.time)
-                    }
-                    val entries = dateList.mapIndexed { index, date ->
-                        val dayTracks = tracks.filter { dbDateFormat.format(it.date) == date }
-                        val distance = dayTracks.sumOf { it.distance.toDouble() }.toFloat()
-                        BarEntry(index.toFloat(), distance / 1000)
-                    }
-                    val labels = dateList.map { it.substring(5).replace("-", "/") }
-                    setupBarChart(entries, labels)
-                }
-            }
-            "month" -> {
-                val (startDate, endDate) = getMonthPeriod()
-                viewModel.getTracksForPeriod(activityType, startDate, endDate).observe(viewLifecycleOwner) { tracks ->
-                    val labels = listOf("Неделя 4", "Неделя 3", "Неделя 2", "Неделя 1")
-                    val calendar = Calendar.getInstance()
-                    val entries = labels.mapIndexed { index, _ ->
-                        calendar.timeInMillis = endDate
-                        calendar.add(Calendar.WEEK_OF_YEAR, -index)
-                        val weekEnd = calendar.timeInMillis
-                        calendar.add(Calendar.DAY_OF_YEAR, -6)
-                        val weekStart = calendar.timeInMillis
-                        
-                        val weekTracks = tracks.filter { it.date in weekStart..weekEnd }
-                        val distance = weekTracks.sumOf { it.distance.toDouble() }.toFloat()
-                        BarEntry(index.toFloat(), distance / 1000)
-                    }.reversed().toMutableList()
-                    setupBarChart(entries, labels.reversed())
-                }
-            }
-            "year" -> {
-                val (startDate, endDate) = getYearPeriod()
-                viewModel.getTracksForPeriod(activityType, startDate, endDate).observe(viewLifecycleOwner) { tracks ->
-                    val labels = listOf("Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек")
-                    val entries = (0..11).map { monthIndex ->
-                        val monthTracks = tracks.filter {
-                            val cal = Calendar.getInstance().apply { timeInMillis = it.date }
-                            cal.get(Calendar.MONTH) == monthIndex
-                        }
-                        val distance = monthTracks.sumOf { it.distance.toDouble() }.toFloat()
-                        BarEntry(monthIndex.toFloat(), distance / 1000)
-                    }.toMutableList()
-                    setupBarChart(entries, labels)
-                }
-            }
+        val (startDate, endDate) = when(period) {
+            "week" -> getWeekPeriod()
+            "month" -> getMonthPeriod()
+            "year" -> getYearPeriod()
+            else -> return
+        }
+
+        viewModel.getTracksForPeriod(activityType, startDate, endDate).observe(viewLifecycleOwner) { tracks ->
+            val (distEntries, distLabels) = processDataForPeriod(tracks, period, false)
+            setupBarChart(binding.barChart, BarData(BarDataSet(distEntries, "")), distLabels)
+
+            val (calEntries, calLabels) = processDataForPeriod(tracks, period, true)
+            setupBarChart(binding.barChartCalories, BarData(BarDataSet(calEntries, "")), calLabels)
         }
     }
 
-    private fun setupBarChart(entries: List<BarEntry>, labels: List<String>) {
-        val dataSet = BarDataSet(entries, "").apply {
+    private fun processDataForPeriod(tracks: List<com.dscreate_app.gpstracker.database.TrackItem>, period: String, isCalories: Boolean): Pair<List<BarEntry>, List<String>> {
+        val calendar = Calendar.getInstance()
+        val (startDate, _) = when(period) {
+            "week" -> getWeekPeriod()
+            "month" -> getMonthPeriod()
+            "year" -> getYearPeriod()
+            else -> return Pair(emptyList(), emptyList())
+        }
+
+        return when (period) {
+            "week" -> {
+                val dateFormat = SimpleDateFormat("dd/MM", Locale.getDefault())
+                val entries = (0 until 7).map { i ->
+                    calendar.timeInMillis = startDate
+                    calendar.add(Calendar.DAY_OF_YEAR, i)
+                    val dayTracks = tracks.filter {
+                        val trackCal = Calendar.getInstance().apply { timeInMillis = it.date }
+                        trackCal.get(Calendar.DAY_OF_YEAR) == calendar.get(Calendar.DAY_OF_YEAR) &&
+                        trackCal.get(Calendar.YEAR) == calendar.get(Calendar.YEAR)
+                    }
+                    val value = if(isCalories) dayTracks.sumOf { it.calories.toDouble() }.toFloat() else dayTracks.sumOf { it.distance.toDouble() }.toFloat() / 1000
+                    BarEntry(i.toFloat(), value)
+                }
+                val labels = (0 until 7).map {
+                    calendar.timeInMillis = startDate
+                    calendar.add(Calendar.DAY_OF_YEAR, it)
+                    dateFormat.format(calendar.time)
+                }
+                Pair(entries, labels)
+            }
+            "month" -> {
+                val labels = listOf("Неделя 1", "Неделя 2", "Неделя 3", "Неделя 4")
+                val entries = labels.mapIndexed { index, _ ->
+                    calendar.timeInMillis = startDate
+                    calendar.add(Calendar.WEEK_OF_YEAR, index)
+                    val weekStart = calendar.timeInMillis
+                    calendar.add(Calendar.DAY_OF_YEAR, 6)
+                    val weekEnd = calendar.timeInMillis
+
+                    val weekTracks = tracks.filter { it.date in weekStart..weekEnd }
+                    val value = if(isCalories) weekTracks.sumOf { it.calories.toDouble() }.toFloat() else weekTracks.sumOf { it.distance.toDouble() }.toFloat() / 1000
+                    BarEntry(index.toFloat(), value)
+                }.toMutableList()
+                Pair(entries, labels)
+            }
+            "year" -> {
+                val labels = listOf("Янв", "Фев", "Мар", "Апр", "Май", "Июн", "Июл", "Авг", "Сен", "Окт", "Ноя", "Дек")
+                val entries = (0..11).map { monthIndex ->
+                    val monthTracks = tracks.filter {
+                        val cal = Calendar.getInstance().apply { timeInMillis = it.date }
+                        cal.get(Calendar.MONTH) == monthIndex
+                    }
+                    val value = if(isCalories) monthTracks.sumOf { it.calories.toDouble() }.toFloat() else monthTracks.sumOf { it.distance.toDouble() }.toFloat() / 1000
+                    BarEntry(monthIndex.toFloat(), value)
+                }.toMutableList()
+                Pair(entries, labels)
+            }
+            else -> Pair(emptyList(), emptyList())
+        }
+    }
+
+    private fun setupBarChart(chart: BarChart, data: BarData, labels: List<String>) {
+        val dataSet = data.getDataSetByIndex(0) as BarDataSet
+        dataSet.apply {
             colors = ColorTemplate.MATERIAL_COLORS.toList()
             valueFormatter = object : ValueFormatter() {
                 override fun getFormattedValue(value: Float): String {
-                    return if (value == 0f) "" else String.format("%.1f", value)
+                    return if (value == 0f) "" else String.format("%.0f", value)
                 }
             }
             valueTextSize = 12f
         }
-        val data = BarData(dataSet)
-        binding.barChart.apply {
-            this.data = data
-            description.isEnabled = false
-            legend.isEnabled = false
-            animateY(1000)
 
-            xAxis.apply {
-                valueFormatter = IndexAxisValueFormatter(labels)
-                position = XAxis.XAxisPosition.BOTTOM
-                granularity = 1f
-                setDrawGridLines(false)
-                labelRotationAngle = -45f
-                labelCount = labels.size
-            }
-            axisLeft.apply {
-                setDrawGridLines(false)
-                axisMinimum = 0f
-            }
-            axisRight.isEnabled = false
-            setExtraBottomOffset(50f)
-            invalidate()
+        chart.data = data
+        chart.description.isEnabled = false
+        chart.legend.isEnabled = false
+        chart.animateY(1000)
+
+        chart.xAxis.apply {
+            valueFormatter = IndexAxisValueFormatter(labels)
+            position = XAxis.XAxisPosition.BOTTOM
+            granularity = 1f
+            setDrawGridLines(false)
+            labelRotationAngle = -45f
+            labelCount = labels.size
         }
+        chart.axisLeft.apply {
+            setDrawGridLines(false)
+            axisMinimum = 0f
+        }
+        chart.axisRight.isEnabled = false
+        chart.setExtraBottomOffset(60f)
+        chart.invalidate()
     }
 
     private fun getWeekPeriod(): Pair<Long, Long> {

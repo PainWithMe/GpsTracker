@@ -12,8 +12,8 @@ object TimeUtils {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    // Formatter for displaying the date, e.g., "15 декабря 2025"
-    private val dateFormatter = SimpleDateFormat("dd MMMM yyyy", Locale("ru"))
+    // Formatter for displaying the date and time, e.g., "15 декабря 2025 11:30"
+    private val dateTimeFormatter = SimpleDateFormat("dd MMMM yyyy HH:mm", Locale("ru"))
 
     // Gets duration from milliseconds
     fun getTime(timeInMillis: Long): String {
@@ -22,10 +22,15 @@ object TimeUtils {
         return timeFormatter.format(calendar.time)
     }
 
-    // Gets the current date as a formatted string
-    fun getFormattedDate(timeInMillis: Long): String {
+    // Gets the current date and time as a timestamp
+    fun getCurrentTimeInMillis(): Long {
+        return System.currentTimeMillis()
+    }
+
+    // Gets the date and time as a formatted string from a timestamp
+    fun getFormattedDateTime(timeInMillis: Long): String {
         val calendar = Calendar.getInstance()
         calendar.timeInMillis = timeInMillis
-        return dateFormatter.format(calendar.time)
+        return dateTimeFormatter.format(calendar.time)
     }
 }

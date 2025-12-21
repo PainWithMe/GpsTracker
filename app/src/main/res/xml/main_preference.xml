@@ -38,4 +38,15 @@
             app:icon="@drawable/ic_circle"
             app:summary="@string/track_color_summary" />
     </PreferenceCategory>
+
+    <PreferenceCategory android:title="Экспорт">
+
+        <Preference
+            android:key="export_csv_key"
+            android:title="Экспорт всех тренировок в CSV"
+            app:icon="@android:drawable/ic_menu_share"
+            app:summary="Сохранить все данные в файл" />
+
+    </PreferenceCategory>
+
 </PreferenceScreen>

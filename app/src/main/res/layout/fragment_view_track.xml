@@ -6,99 +6,120 @@
     android:layout_height="match_parent"
     tools:context=".fragments.ViewTrackFragment">
 
-    <com.google.android.material.floatingactionbutton.FloatingActionButton
-        android:id="@+id/fCenter"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:layout_marginEnd="8dp"
-        android:clickable="true"
-        android:src="@drawable/my_location"
-        app:backgroundTint="@color/white"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
-
     <org.osmdroid.views.MapView
         android:id="@+id/map"
         android:layout_width="0dp"
         android:layout_height="0dp"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@id/cardView"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
-
-    </org.osmdroid.views.MapView>
-
-    <TextView
-        android:id="@+id/tvData"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:layout_marginTop="8dp"
-        android:background="#ADFFFFFF"
-        android:paddingStart="5dp"
-        android:paddingEnd="5dp"
-        android:paddingBottom="3dp"
-        android:text="Дата:"
-        android:textColor="@color/black"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent" />
 
-    <TextView
-        android:id="@+id/tvTime"
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fCenter"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="#ADFFFFFF"
-        android:paddingStart="5dp"
-        android:paddingEnd="5dp"
-        android:paddingBottom="3dp"
-        android:text="Время: 00:00:00"
-        android:textColor="@color/black"
-        app:layout_constraintStart_toStartOf="@+id/tvData"
-        app:layout_constraintTop_toBottomOf="@+id/tvData" />
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="10dp"
+        android:clickable="true"
+        android:src="@drawable/my_location"
+        app:backgroundTint="@color/white"
+        app:layout_constraintBottom_toTopOf="@id/cardView"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <TextView
-        android:id="@+id/tvAverageSpeed"
+    <com.google.android.material.floatingactionbutton.FloatingActionButton
+        android:id="@+id/fExport"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="#ADFFFFFF"
-        android:paddingStart="5dp"
-        android:paddingEnd="5dp"
-        android:paddingBottom="3dp"
-        android:text="Средняя скорость: 0,0 м/с"
-        android:textColor="@color/black"
-        app:layout_constraintStart_toStartOf="@+id/tvTime"
-        app:layout_constraintTop_toBottomOf="@+id/tvTime" />
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="10dp"
+        android:clickable="true"
+        android:src="@android:drawable/ic_menu_share"
+        app:backgroundTint="@color/white"
+        app:layout_constraintBottom_toTopOf="@id/fCenter"
+        app:layout_constraintEnd_toEndOf="parent" />
 
-    <TextView
-        android:id="@+id/tvDistance"
-        android:layout_width="wrap_content"
+    <androidx.cardview.widget.CardView
+        android:id="@+id/cardView"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="#ADFFFFFF"
-        android:paddingStart="5dp"
-        android:paddingEnd="5dp"
-        android:paddingBottom="3dp"
-        android:text="Дистанция: 0,0 км"
-        android:textColor="@color/black"
-        android:textSize="24sp"
-        app:layout_constraintStart_toStartOf="@+id/tvAverageSpeed"
-        app:layout_constraintTop_toBottomOf="@+id/tvAverageSpeed" />
+        app:cardElevation="5dp"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent">
 
-    <TextView
-        android:id="@+id/tvCalories"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        android:background="#ADFFFFFF"
-        android:paddingStart="5dp"
-        android:paddingEnd="5dp"
-        android:paddingBottom="3dp"
-        android:text="Калории: 0"
-        android:textColor="@color/black"
-        app:layout_constraintStart_toStartOf="@+id/tvDistance"
-        app:layout_constraintTop_toBottomOf="@+id/tvDistance" />
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="10dp">
+
+            <TextView
+                android:id="@+id/tvData"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_horizontal"
+                android:text="Дата: 12.12.2022"
+                android:textColor="@color/black" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvTime"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:text="Время: 00:00:00"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/tvAverageSpeed"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:text="Средняя скорость: 0.0 м/с"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
+
+            </LinearLayout>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/tvDistance"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:text="Дистанция: 0.0 км"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
+
+                <TextView
+                    android:id="@+id/tvCalories"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:gravity="center_horizontal"
+                    android:text="Калории: 0"
+                    android:textColor="@color/black"
+                    android:textSize="16sp" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+    </androidx.cardview.widget.CardView>
 
 </androidx.constraintlayout.widget.ConstraintLayout>
