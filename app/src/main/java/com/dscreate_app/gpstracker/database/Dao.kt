@@ -49,6 +49,13 @@ interface Dao {
     @Query("SELECT MAX(calories) FROM track")
     fun getMaxCalories(): Flow<Float?>
 
+    // Дополнительные запросы для Виртуального тренера
+    @Query("SELECT MAX(date) FROM track")
+    fun getLastTrackDate(): Flow<Long?>
+
+    @Query("SELECT speed FROM track ORDER BY id DESC LIMIT 1")
+    fun getLastTrackSpeed(): Flow<Float?>
+
     // Queries for stats by activity type
     @Query("SELECT SUM(distance) FROM track WHERE activity_type = :activityType")
     fun getTotalDistanceByType(activityType: String): Flow<Float?>

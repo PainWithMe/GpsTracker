@@ -108,7 +108,6 @@ class StatisticsFragment : Fragment() {
     }
 
     private fun observeTextStats(activityType: String?) {
-        // This function remains the same as before
         if (activityType == null) {
             viewModel.getTotalDistance().observe(viewLifecycleOwner) {
                 binding.tvTotalDistance.text = "Общая дистанция: ${String.format("%.1f", (it ?: 0.0f) / 1000)} км"
@@ -120,7 +119,7 @@ class StatisticsFragment : Fragment() {
                 binding.tvTotalCalories.text = "Всего сожжено: ${(it ?: 0.0f).toInt()} ккал"
             }
             viewModel.getAverageSpeed().observe(viewLifecycleOwner) {
-                binding.tvAverageSpeed.text = "Средняя скорость: ${String.format("%.1f", it ?: 0.0f)} км/ч"
+                binding.tvAverageSpeed.text = "Средняя скорость: ${String.format("%.1f", it ?: 0.0f)} м/с"
             }
             viewModel.getMaxDistance().observe(viewLifecycleOwner) {
                 binding.tvMaxDistance.text = "Макс. дистанция: ${String.format("%.1f", (it ?: 0.0f) / 1000)} км"
@@ -129,7 +128,7 @@ class StatisticsFragment : Fragment() {
                 binding.tvMaxTime.text = "Макс. время: ${TimeUtils.getTime(it ?: 0)}"
             }
             viewModel.getMaxSpeed().observe(viewLifecycleOwner) {
-                binding.tvMaxSpeed.text = "Макс. скорость: ${String.format("%.1f", it ?: 0.0f)} км/ч"
+                binding.tvMaxSpeed.text = "Макс. скорость: ${String.format("%.1f", it ?: 0.0f)} м/с"
             }
             viewModel.getMaxCalories().observe(viewLifecycleOwner) {
                 binding.tvMaxCalories.text = "Макс. калорий: ${(it ?: 0.0f).toInt()} ккал"
@@ -145,7 +144,7 @@ class StatisticsFragment : Fragment() {
                 binding.tvTotalCalories.text = "Всего сожжено: ${(it ?: 0.0f).toInt()} ккал"
             }
             viewModel.getAverageSpeedByType(activityType).observe(viewLifecycleOwner) {
-                binding.tvAverageSpeed.text = "Средняя скорость: ${String.format("%.1f", it ?: 0.0f)} км/ч"
+                binding.tvAverageSpeed.text = "Средняя скорость: ${String.format("%.1f", it ?: 0.0f)} м/с"
             }
             viewModel.getMaxDistanceByType(activityType).observe(viewLifecycleOwner) {
                 binding.tvMaxDistance.text = "Макс. дистанция: ${String.format("%.1f", (it ?: 0.0f) / 1000)} км"
@@ -154,7 +153,7 @@ class StatisticsFragment : Fragment() {
                 binding.tvMaxTime.text = "Макс. время: ${TimeUtils.getTime(it ?: 0)}"
             }
             viewModel.getMaxSpeedByType(activityType).observe(viewLifecycleOwner) {
-                binding.tvMaxSpeed.text = "Макс. скорость: ${String.format("%.1f", it ?: 0.0f)} км/ч"
+                binding.tvMaxSpeed.text = "Макс. скорость: ${String.format("%.1f", it ?: 0.0f)} м/с"
             }
             viewModel.getMaxCaloriesByType(activityType).observe(viewLifecycleOwner) {
                 binding.tvMaxCalories.text = "Макс. калорий: ${(it ?: 0.0f).toInt()} ккал"
@@ -175,11 +174,13 @@ class StatisticsFragment : Fragment() {
             }
             val labels = activityData.map { it.activityType.replace(" ", "\n") }
             val dataSet = BarDataSet(entries, "").apply {
+                colors = ColorTemplate.MATERIAL_COLORS.toList()
                 valueFormatter = object : ValueFormatter() {
                     override fun getFormattedValue(value: Float): String {
                         return if (value == 0f) "" else value.toInt().toString()
                     }
                 }
+                valueTextSize = 12f
             }
             setupBarChart(binding.barChart, BarData(dataSet), labels)
         }
@@ -198,11 +199,13 @@ class StatisticsFragment : Fragment() {
             }
             val labels = caloriesData.map { it.activityType.replace(" ", "\n") }
             val dataSet = BarDataSet(entries, "").apply {
+                colors = ColorTemplate.MATERIAL_COLORS.toList()
                 valueFormatter = object : ValueFormatter() {
                     override fun getFormattedValue(value: Float): String {
                         return if (value == 0f) "" else value.toInt().toString()
                     }
                 }
+                valueTextSize = 12f
             }
             setupBarChart(binding.barChartCalories, BarData(dataSet), labels)
         }
@@ -261,7 +264,7 @@ class StatisticsFragment : Fragment() {
                 Pair(entries, labels)
             }
             "month" -> {
-                val labels = listOf("Неделя 1", "Неделя 2", "Неделя 3", "Неделя 4")
+                val labels = listOf("Нед 1", "Нед 2", "Нед 3", "Нед 4")
                 val entries = labels.mapIndexed { index, _ ->
                     calendar.timeInMillis = startDate
                     calendar.add(Calendar.WEEK_OF_YEAR, index)

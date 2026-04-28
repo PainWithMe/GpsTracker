@@ -1,12 +1,7 @@
 package com.dscreate_app.gpstracker.viewModels
 
 import androidx.lifecycle.*
-import com.dscreate_app.gpstracker.database.ActivityCount
-import com.dscreate_app.gpstracker.database.ActivityCalories
-import com.dscreate_app.gpstracker.database.DatePoints
-import com.dscreate_app.gpstracker.database.MainDb
-import com.dscreate_app.gpstracker.database.TrackItem
-import com.dscreate_app.gpstracker.database.UserProfile
+import com.dscreate_app.gpstracker.database.*
 import com.dscreate_app.gpstracker.location.LocationModel
 import kotlinx.coroutines.launch
 
@@ -49,7 +44,6 @@ class MainViewModel(db: MainDb): ViewModel() {
     fun getTotalCaloriesByType(type: String) = dao.getTotalCaloriesByType(type).asLiveData()
     fun getAverageSpeedByType(type: String) = dao.getAverageSpeedByType(type).asLiveData()
 
-    // Personal records by activity type
     fun getMaxDistanceByType(type: String) = dao.getMaxDistanceByType(type).asLiveData()
     fun getMaxTimeByType(type: String) = dao.getMaxTimeByType(type).asLiveData()
     fun getMaxSpeedByType(type: String) = dao.getMaxSpeedByType(type).asLiveData()

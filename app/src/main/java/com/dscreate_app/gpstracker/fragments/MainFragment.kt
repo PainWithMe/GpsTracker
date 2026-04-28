@@ -52,8 +52,10 @@ class MainFragment : Fragment() {
 
     private lateinit var permLauncher: ActivityResultLauncher<Array<String>>
     private var isServiceRunning = false
+    private var isPaused = false
     private var timer: Timer? = null
     private var startTime = 0L
+    private var pausedTime = 0L
     private var polyLine: Polyline? = null
     private var firstStart: Boolean = true
     private var locationModel: LocationModel? = null
@@ -153,7 +155,8 @@ class MainFragment : Fragment() {
     }
 
     private fun getAverageSpeed(distance: Float): Float {
-        val timeInSeconds = (System.currentTimeMillis() - startTime) / 1000.0f
+        val totalTime = if (isPaused) pausedTime else System.currentTimeMillis() - startTime
+        val timeInSeconds = totalTime / 1000.0f
         return if (timeInSeconds > 0) {
             distance / timeInSeconds
         } else {
@@ -162,9 +165,8 @@ class MainFragment : Fragment() {
     }
 
     private fun getCurrentTime(): String {
-        return getString(R.string.time_tv) + TimeUtils.getTime(
-            System.currentTimeMillis() - startTime
-        )
+        val totalTime = if (isPaused) pausedTime else System.currentTimeMillis() - startTime
+        return getString(R.string.time_tv) + TimeUtils.getTime(totalTime)
     }
 
     private fun geoPointsToString(list: List<GeoPoint>): String {
@@ -185,6 +187,7 @@ class MainFragment : Fragment() {
         val listener = onClicks()
         fStartStop.setOnClickListener(listener)
         fCenter.setOnClickListener(listener)
+        fPause.setOnClickListener(listener)
     }
 
     private fun onClicks(): OnClickListener {
@@ -192,6 +195,7 @@ class MainFragment : Fragment() {
             when(it.id) {
                 R.id.fStartStop -> { startStopService() }
                 R.id.fCenter -> { centerLocation() }
+                R.id.fPause -> { pauseResumeService() }
             }
         }
     }
@@ -203,9 +207,16 @@ class MainFragment : Fragment() {
 
     private fun checkServiceState() {
         isServiceRunning = LocationService.isRunning
+        isPaused = LocationService.isPaused
         if (isServiceRunning) {
             binding.fStartStop.setImageResource(R.drawable.ic_stop)
-            startTimer()
+            binding.fPause.visibility = View.VISIBLE
+            if (isPaused) {
+                binding.fPause.setImageResource(R.drawable.ic_play)
+            } else {
+                binding.fPause.setImageResource(R.drawable.ic_pause)
+                startTimer()
+            }
         }
     }
 
@@ -215,8 +226,10 @@ class MainFragment : Fragment() {
         } else {
             activity?.stopService(Intent(activity, LocationService::class.java))
             binding.fStartStop.setImageResource(R.drawable.ic_play)
+            binding.fPause.visibility = View.GONE
             timer?.cancel()
-            getTrackItem()?.let { track ->
+            val finalTime = if (isPaused) pausedTime else System.currentTimeMillis() - startTime
+            getTrackItem(finalTime)?.let { track ->
                 DialogManager.showSaveDialog(
                     requireContext(),
                     track,
@@ -227,11 +240,32 @@ class MainFragment : Fragment() {
                         }
                     })
             }
+            isPaused = false
+            pausedTime = 0L
         }
         isServiceRunning = !isServiceRunning
     }
 
-    private fun getTrackItem(): TrackItem? {
+    private fun pauseResumeService() {
+        val intent = Intent(activity, LocationService::class.java)
+        if (!isPaused) {
+            intent.action = LocationService.ACTION_PAUSE
+            binding.fPause.setImageResource(R.drawable.ic_play)
+            timer?.cancel()
+            pausedTime = System.currentTimeMillis() - startTime
+        } else {
+            intent.action = LocationService.ACTION_RESUME
+            binding.fPause.setImageResource(R.drawable.ic_pause)
+            startTime = System.currentTimeMillis() - pausedTime
+            LocationService.startTime = startTime
+            startTimer()
+        }
+        isPaused = !isPaused
+        LocationService.isPaused = isPaused
+        activity?.startService(intent)
+    }
+
+    private fun getTrackItem(time: Long): TrackItem? {
         val activityType = if (binding.spActivityType.selectedItem != null) {
             binding.spActivityType.selectedItem.toString()
         } else {
@@ -240,7 +274,7 @@ class MainFragment : Fragment() {
 
         return TrackItem(
             null,
-            System.currentTimeMillis() - startTime,
+            time,
             TimeUtils.getCurrentTimeInMillis(),
             locationModel?.distance ?: 0.0f,
             getAverageSpeed(locationModel?.distance ?: 0.0f),
@@ -265,6 +299,8 @@ class MainFragment : Fragment() {
             activity?.startService(intent)
         }
         binding.fStartStop.setImageResource(R.drawable.ic_stop)
+        binding.fPause.visibility = View.VISIBLE
+        binding.fPause.setImageResource(R.drawable.ic_pause)
         LocationService.startTime = System.currentTimeMillis()
         startTimer()
     }

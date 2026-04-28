@@ -20,6 +20,7 @@ import com.dscreate_app.gpstracker.MainActivity
 import com.dscreate_app.gpstracker.R
 import com.google.android.gms.location.*
 import org.osmdroid.util.GeoPoint
+import java.util.*
 
 class LocationService : Service() {
 
@@ -31,7 +32,6 @@ class LocationService : Service() {
     private var weight = 70.0f
     private var activityType = "Ходьба"
     private lateinit var geoPointsList: ArrayList<GeoPoint>
-    private var isDebug = false
 
     override fun onBind(intent: Intent?): IBinder? {
         return null
@@ -45,24 +45,40 @@ class LocationService : Service() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         intent?.let {
-            weight = it.getFloatExtra(WEIGHT_KEY, 70.0f)
-            activityType = it.getStringExtra(ACTIVITY_TYPE_KEY) ?: "Ходьба"
+            if (it.hasExtra(WEIGHT_KEY)) weight = it.getFloatExtra(WEIGHT_KEY, 70.0f)
+            if (it.hasExtra(ACTIVITY_TYPE_KEY)) activityType = it.getStringExtra(ACTIVITY_TYPE_KEY) ?: "Ходьба"
+            
+            when (it.action) {
+                ACTION_PAUSE -> {
+                    isPaused = true
+                    lastLocation = null
+                }
+                ACTION_RESUME -> {
+                    isPaused = false
+                }
+                else -> {
+                    startNotification()
+                    startLocationUpdates()
+                    isRunning = true
+                    isPaused = false
+                }
+            }
         }
-        startNotification()
-        startLocationUpdates()
-        isRunning = true
         return START_STICKY
     }
 
     override fun onDestroy() {
         super.onDestroy()
         isRunning = false
+        isPaused = false
         locationProvider.removeLocationUpdates(locationCallback)
     }
 
     private val locationCallback = object : LocationCallback() {
         override fun onLocationResult(locationResult: LocationResult) {
             super.onLocationResult(locationResult)
+            if (isPaused) return
+
             val currentLocation = locationResult.lastLocation
             if (lastLocation != null && currentLocation != null) {
                 val timeInMillis = currentLocation.time - lastLocation!!.time
@@ -154,7 +170,6 @@ class LocationService : Service() {
         }.build()
 
         locationProvider = LocationServices.getFusedLocationProviderClient(baseContext)
-        Log.d("MyLog", "Interval: $updateInterval")
     }
 
     private fun startLocationUpdates() {
@@ -180,8 +195,11 @@ class LocationService : Service() {
         const val LOC_MODEL_INTENT = "loc_intent"
         const val WEIGHT_KEY = "weight_key"
         const val ACTIVITY_TYPE_KEY = "activity_type_key"
+        const val ACTION_PAUSE = "action_pause"
+        const val ACTION_RESUME = "action_resume"
 
         var isRunning = false
+        var isPaused = false
         var startTime = 0L
     }
 }

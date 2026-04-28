@@ -39,7 +39,19 @@
             app:summary="@string/track_color_summary" />
     </PreferenceCategory>
 
-    <PreferenceCategory android:title="Экспорт">
+    <PreferenceCategory android:title="Данные и карты">
+
+        <Preference
+            android:key="download_map_key"
+            android:title="Оффлайн-карты"
+            android:icon="@android:drawable/ic_menu_save"
+            app:summary="Загрузить область карты для работы без интернета" />
+
+        <Preference
+            android:key="import_gpx_key"
+            android:title="Импортировать маршрут (GPX)"
+            android:icon="@android:drawable/ic_menu_add"
+            app:summary="Добавить маршрут из файла на устройстве" />
 
         <Preference
             android:key="export_csv_key"

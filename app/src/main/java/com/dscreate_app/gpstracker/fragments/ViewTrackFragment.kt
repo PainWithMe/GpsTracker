@@ -4,6 +4,7 @@ import android.content.Context
 import android.content.Intent
 import android.graphics.Color
 import android.os.Bundle
+import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
@@ -16,16 +17,22 @@ import com.dscreate_app.gpstracker.R
 import com.dscreate_app.gpstracker.database.MainApp
 import com.dscreate_app.gpstracker.database.TrackItem
 import com.dscreate_app.gpstracker.databinding.FragmentViewTrackBinding
+import com.dscreate_app.gpstracker.location.GeoPointItem
 import com.dscreate_app.gpstracker.utils.TimeUtils
 import com.dscreate_app.gpstracker.utils.showToast
 import com.dscreate_app.gpstracker.viewModels.MainViewModel
 import com.dscreate_app.gpstracker.viewModels.ViewModelFactory
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import org.osmdroid.config.Configuration
 import org.osmdroid.library.BuildConfig
+import org.osmdroid.util.BoundingBox
 import org.osmdroid.util.GeoPoint
 import org.osmdroid.views.overlay.Marker
 import org.osmdroid.views.overlay.Polyline
 import java.io.File
+import java.text.SimpleDateFormat
+import java.util.*
 
 class ViewTrackFragment : Fragment() {
 
@@ -37,6 +44,7 @@ class ViewTrackFragment : Fragment() {
         ViewModelFactory((requireContext().applicationContext as MainApp).database)
     }
     private var startPoint: GeoPoint? = null
+    private var trackBoundingBox: BoundingBox? = null
 
     override fun onCreateView(
         inflater: LayoutInflater, container: ViewGroup?,
@@ -52,7 +60,11 @@ class ViewTrackFragment : Fragment() {
         setupMap()
         getTrack()
         binding.fCenter.setOnClickListener {
-            startPoint?.let { binding.map.controller.animateTo(it) }
+            if (trackBoundingBox != null) {
+                binding.map.zoomToBoundingBox(trackBoundingBox, true, 100)
+            } else {
+                startPoint?.let { binding.map.controller.animateTo(it) }
+            }
         }
     }
 
@@ -90,8 +102,15 @@ class ViewTrackFragment : Fragment() {
                 if (polyline.actualPoints.isNotEmpty()) {
                     map.overlays.add(polyline)
                     setMarkers(polyline.actualPoints)
-                    goToStartPosition(polyline.actualPoints[0])
+                    
+                    // Вычисляем границы маршрута
+                    trackBoundingBox = BoundingBox.fromGeoPoints(polyline.actualPoints)
                     startPoint = polyline.actualPoints[0]
+                    
+                    // Зумируем карту так, чтобы весь маршрут влез в экран (с небольшим отступом 100 пикселей)
+                    map.post {
+                        map.zoomToBoundingBox(trackBoundingBox, true, 100)
+                    }
                 }
 
                 fExport.setOnClickListener {
@@ -103,15 +122,47 @@ class ViewTrackFragment : Fragment() {
     }
 
     private fun generateGpx(track: TrackItem): String {
-        val header = "<?xml version='1.0' encoding='UTF-8' standalone='no' ?><gpx version='1.1' creator='GpsTracker'><trk><name>${track.activityType}</name><trkseg>"
-        val footer = "</trkseg></trk></gpx>"
+        val isoFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply {
+            timeZone = TimeZone.getTimeZone("UTC")
+        }
+        val startTimeStr = isoFormat.format(Date(track.date))
 
-        val points = track.geoPoints.split("/").filter { it.isNotEmpty() }.joinToString("") {
-            val latLon = it.split(",")
-            "<trkpt lat='${latLon[0]}' lon='${latLon[1]}'></trkpt>"
+        val header = "<?xml version='1.0' encoding='UTF-8' standalone='no' ?>\n" +
+                "<gpx version='1.1' creator='GpsTracker' \n" +
+                " xmlns='http://www.topografix.com/GPX/1/1' \n" +
+                " xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' \n" +
+                " xsi:schemaLocation='http://www.topografix.com/GPX/1/1 http://www.topografix.com/GPX/1/1/gpx.xsd'>\n" +
+                "  <metadata>\n" +
+                "    <time>$startTimeStr</time>\n" +
+                "  </metadata>\n" +
+                "  <trk>\n" +
+                "    <name>${track.activityType}</name>\n" +
+                "    <trkseg>\n"
+
+        val footer = "    </trkseg>\n  </trk>\n</gpx>"
+        val pointsBuilder = StringBuilder()
+
+        try {
+            val gson = Gson()
+            val type = object : TypeToken<List<GeoPointItem>>() {}.type
+            val list: List<GeoPointItem> = gson.fromJson(track.geoPoints, type)
+            
+            list.forEach { point ->
+                pointsBuilder.append("      <trkpt lat='${point.latitude}' lon='${point.longitude}'>\n")
+                pointsBuilder.append("        <time>${point.time}</time>\n")
+                pointsBuilder.append("      </trkpt>\n")
+            }
+        } catch (e: Exception) {
+            val list = track.geoPoints.split("/").filter { it.isNotEmpty() }
+            list.forEach {
+                val latLon = it.split(",")
+                if (latLon.size == 2) {
+                    pointsBuilder.append("      <trkpt lat='${latLon[0]}' lon='${latLon[1]}'></trkpt>\n")
+                }
+            }
         }
 
-        return header + points + footer
+        return header + pointsBuilder.toString() + footer
     }
 
     private fun shareGpxFile(gpxContent: String, trackId: Int?) {
@@ -133,11 +184,6 @@ class ViewTrackFragment : Fragment() {
         }
     }
 
-    private fun goToStartPosition(startPosition: GeoPoint) {
-        binding.map.controller.zoomTo(15.0)
-        binding.map.controller.animateTo(startPosition)
-    }
-
     private fun setMarkers(list: List<GeoPoint>) = with(binding) {
         val startMarker = Marker(map)
         val finishMarker = Marker(map)
@@ -157,12 +203,21 @@ class ViewTrackFragment : Fragment() {
             PreferenceManager.getDefaultSharedPreferences(requireContext())
                 .getString(SHARED_PREF_COLOR_KEY, SHARED_PREF_DEF_VALUE)
         )
-        val list = geoPoints.split("/")
-        list.forEach {
-            if (it.isEmpty()) return@forEach
-            val points = it.split(",")
-            if (points.size == 2) {
-                 polyline.addPoint(GeoPoint(points[0].toDouble(), points[1].toDouble()))
+        
+        try {
+            val gson = Gson()
+            val type = object : TypeToken<List<GeoPointItem>>() {}.type
+            val list: List<GeoPointItem> = gson.fromJson(geoPoints, type)
+            list.forEach {
+                polyline.addPoint(GeoPoint(it.latitude, it.longitude))
+            }
+        } catch (e: Exception) {
+            val list = geoPoints.split("/").filter { it.isNotEmpty() }
+            list.forEach {
+                val points = it.split(",")
+                if (points.size == 2) {
+                    polyline.addPoint(GeoPoint(points[0].toDouble(), points[1].toDouble()))
+                }
             }
         }
         return polyline

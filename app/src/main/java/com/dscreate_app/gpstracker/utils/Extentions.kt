@@ -1,7 +1,6 @@
 package com.dscreate_app.gpstracker.utils
 
 import android.content.pm.PackageManager
-import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
@@ -9,6 +8,7 @@ import androidx.fragment.app.Fragment
 import com.dscreate_app.gpstracker.R
 
 fun Fragment.openFragment(frag: Fragment) {
+    if (!isAdded) return
     requireActivity().supportFragmentManager.beginTransaction()
         .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
         .replace(R.id.placeHolder, frag)
@@ -21,14 +21,16 @@ fun AppCompatActivity.openFragment(frag: Fragment) {
             return
         }
     }
-        supportFragmentManager.beginTransaction()
-            .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
-            .replace(R.id.placeHolder, frag)
-            .commit()
+    supportFragmentManager.beginTransaction()
+        .setCustomAnimations(android.R.anim.fade_in, android.R.anim.fade_out)
+        .replace(R.id.placeHolder, frag)
+        .commit()
 }
 
 fun Fragment.showToast(string: String) {
-    Toast.makeText(activity, string, Toast.LENGTH_SHORT).show()
+    context?.let {
+        Toast.makeText(it, string, Toast.LENGTH_SHORT).show()
+    }
 }
 
 fun AppCompatActivity.showToast(string: String) {
@@ -36,8 +38,5 @@ fun AppCompatActivity.showToast(string: String) {
 }
 
 fun Fragment.checkPermission(permission: String): Boolean {
-    return when(PackageManager.PERMISSION_GRANTED) {
-        ContextCompat.checkSelfPermission(requireActivity(), permission) -> true
-        else -> false
-    }
+    return ContextCompat.checkSelfPermission(requireActivity(), permission) == PackageManager.PERMISSION_GRANTED
 }

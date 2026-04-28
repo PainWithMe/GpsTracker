@@ -11,13 +11,13 @@ data class TrackItem(
     @ColumnInfo(name = "time")
     val time: Long,
     @ColumnInfo(name = "date")
-    val date: Long, // String -> Long
+    val date: Long,
     @ColumnInfo(name = "distance")
     val distance: Float,
     @ColumnInfo(name = "speed")
     val speed: Float,
     @ColumnInfo(name = "geo_points")
-    val geoPoints: String,
+    val geoPoints: String, // Keep as String, will store JSON
     @ColumnInfo(name = "activity_type")
     val activityType: String,
     @ColumnInfo(name = "calories")
