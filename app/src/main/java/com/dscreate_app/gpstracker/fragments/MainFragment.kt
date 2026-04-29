@@ -33,9 +33,12 @@ import com.dscreate_app.gpstracker.location.LocationService
 import com.dscreate_app.gpstracker.utils.DialogManager
 import com.dscreate_app.gpstracker.utils.TimeUtils
 import com.dscreate_app.gpstracker.utils.checkPermission
+import com.dscreate_app.gpstracker.utils.openFragment
 import com.dscreate_app.gpstracker.utils.showToast
 import com.dscreate_app.gpstracker.viewModels.MainViewModel
 import com.dscreate_app.gpstracker.viewModels.ViewModelFactory
+import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import org.osmdroid.config.Configuration
 import org.osmdroid.library.BuildConfig
 import org.osmdroid.util.GeoPoint
@@ -61,6 +64,17 @@ class MainFragment : Fragment() {
     private var locationModel: LocationModel? = null
     private lateinit var myLocOverlay: MyLocationNewOverlay
     private var userProfile: UserProfile? = null
+
+    companion object {
+        private var isAdviceDismissedSession = false
+        private const val SHARED_PREF_TABLE_NAME = "osm_pref"
+        private const val SHARED_PREF_COLOR_KEY = "color_key"
+        private const val SHARED_PREF_DEF_VALUE = "#03A9F4"
+
+        @JvmStatic
+        fun newInstance() = MainFragment()
+    }
+
     private val viewModel: MainViewModel by activityViewModels {
         ViewModelFactory((requireContext().applicationContext as MainApp).database)
     }
@@ -85,12 +99,19 @@ class MainFragment : Fragment() {
         locationUpdates()
         setupSpinner()
         observeUserProfile()
+        observeTrainingAdvice()
     }
 
     override fun onResume() {
         super.onResume()
         checkLocationPermission()
         firstStart = true
+    }
+
+    override fun onPause() {
+        super.onPause()
+        // При уходе в другие экраны помечаем совет как просмотренный
+        isAdviceDismissedSession = true
     }
 
     override fun onDestroyView() {
@@ -125,6 +146,43 @@ class MainFragment : Fragment() {
         }
     }
 
+    private fun observeTrainingAdvice() {
+        viewModel.userProfile.observe(viewLifecycleOwner) { profile ->
+            val name = profile?.name ?: "Друг"
+            viewModel.getTrainingAdvice(name).observe(viewLifecycleOwner) { advice ->
+                if (advice == null) {
+                    binding.adviceCard.visibility = View.GONE
+                    return@observe
+                }
+
+                // Рекорды должны прорываться сквозь флаг закрытия
+                val isRecordAdvice = advice.contains("🎉") || advice.contains("⚡") || advice.contains("🔥")
+                
+                if ((!isAdviceDismissedSession || isRecordAdvice) && !isServiceRunning) {
+                    binding.adviceCard.visibility = View.VISIBLE
+                    binding.tvAdvice.text = advice
+                    setupAdviceNavigation(advice)
+                } else {
+                    binding.adviceCard.visibility = View.GONE
+                }
+            }
+        }
+    }
+
+    private fun setupAdviceNavigation(advice: String) {
+        binding.adviceCard.setOnClickListener {
+            isAdviceDismissedSession = true // Помечаем как закрытое при клике
+            when {
+                advice.contains("рекорд") || advice.contains("темп") || advice.contains("прогресс") -> {
+                    openFragment(StatisticsFragment())
+                }
+                else -> {
+                    openFragment(SettingsFragment())
+                }
+            }
+        }
+    }
+
     private fun locationUpdates() = with(binding) {
         viewModel.locationUpdates.observe(viewLifecycleOwner) {
             val distance = String.format("%.1f", it.distance / 1000)
@@ -148,7 +206,7 @@ class MainFragment : Fragment() {
         timer?.schedule(object : TimerTask() {
             override fun run() {
               activity?.runOnUiThread {
-                 viewModel.timeData.value = getCurrentTime()
+                 if (_binding != null) viewModel.timeData.value = getCurrentTime()
               }
             }
         }, 1000, 1000)
@@ -188,6 +246,7 @@ class MainFragment : Fragment() {
         fStartStop.setOnClickListener(listener)
         fCenter.setOnClickListener(listener)
         fPause.setOnClickListener(listener)
+        btnCloseAdvice.setOnClickListener(listener)
     }
 
     private fun onClicks(): OnClickListener {
@@ -196,6 +255,10 @@ class MainFragment : Fragment() {
                 R.id.fStartStop -> { startStopService() }
                 R.id.fCenter -> { centerLocation() }
                 R.id.fPause -> { pauseResumeService() }
+                R.id.btnCloseAdvice -> { 
+                    isAdviceDismissedSession = true
+                    binding.adviceCard.visibility = View.GONE
+                }
             }
         }
     }
@@ -211,6 +274,7 @@ class MainFragment : Fragment() {
         if (isServiceRunning) {
             binding.fStartStop.setImageResource(R.drawable.ic_stop)
             binding.fPause.visibility = View.VISIBLE
+            binding.adviceCard.visibility = View.GONE 
             if (isPaused) {
                 binding.fPause.setImageResource(R.drawable.ic_play)
             } else {
@@ -223,6 +287,8 @@ class MainFragment : Fragment() {
     private fun startStopService() {
         if (!isServiceRunning) {
             startLocService()
+            isAdviceDismissedSession = true 
+            binding.adviceCard.visibility = View.GONE
         } else {
             activity?.stopService(Intent(activity, LocationService::class.java))
             binding.fStartStop.setImageResource(R.drawable.ic_play)
@@ -237,6 +303,8 @@ class MainFragment : Fragment() {
                         override fun onClick() {
                             showToast("Маршрут сохранён!")
                             viewModel.insertTrack(track)
+                            // Сбрасываем флаг, чтобы тренер мог сразу поздравить с рекордом
+                            isAdviceDismissedSession = false 
                         }
                     })
             }
@@ -306,11 +374,16 @@ class MainFragment : Fragment() {
     }
 
     private fun settingsOsm() {
-        Configuration.getInstance().load(
-            requireActivity(),
-            activity?.getSharedPreferences(SHARED_PREF_TABLE_NAME, Context.MODE_PRIVATE)
+        val osmConfig = Configuration.getInstance()
+        osmConfig.load(
+            requireContext(),
+            PreferenceManager.getDefaultSharedPreferences(requireContext())
         )
-        Configuration.getInstance().userAgentValue = BuildConfig.APPLICATION_ID
+        val basePath = java.io.File(requireContext().filesDir, "osmdroid")
+        osmConfig.osmdroidBasePath = basePath
+        val tileCache = java.io.File(basePath, "tiles")
+        osmConfig.osmdroidTileCache = tileCache
+        osmConfig.userAgentValue = BuildConfig.APPLICATION_ID
     }
 
     private fun initOSM() = with(binding) {
@@ -319,15 +392,19 @@ class MainFragment : Fragment() {
             PreferenceManager.getDefaultSharedPreferences(requireContext())
                 .getString(SHARED_PREF_COLOR_KEY, SHARED_PREF_DEF_VALUE)
         )
-        map.controller.setZoom(20.0)
+        map.controller.setZoom(15.0)
         val mLocProvider = GpsMyLocationProvider(activity)
         myLocOverlay = MyLocationNewOverlay(mLocProvider, map)
         myLocOverlay.enableMyLocation()
         myLocOverlay.enableFollowLocation()
         myLocOverlay.runOnFirstFix {
-            map.overlays.clear()
-            map.overlays.add(polyLine)
-            map.overlays.add(myLocOverlay)
+            activity?.runOnUiThread {
+                if (_binding != null) {
+                    map.overlays.clear()
+                    polyLine?.let { map.overlays.add(it) }
+                    map.overlays.add(myLocOverlay)
+                }
+            }
         }
     }
 
@@ -388,8 +465,6 @@ class MainFragment : Fragment() {
                     }
                 }
             )
-        } else {
-            showToast("GPS включен")
         }
     }
 
@@ -429,15 +504,5 @@ class MainFragment : Fragment() {
         } else {
             addPoint(list)
         }
-    }
-
-    companion object {
-
-        private const val SHARED_PREF_TABLE_NAME = "osm_pref"
-        private const val SHARED_PREF_COLOR_KEY = "color_key"
-        private const val SHARED_PREF_DEF_VALUE = "#03A9F4"
-
-        @JvmStatic
-        fun newInstance() = MainFragment()
     }
 }
