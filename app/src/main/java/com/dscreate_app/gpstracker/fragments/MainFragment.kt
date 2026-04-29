@@ -37,8 +37,6 @@ import com.dscreate_app.gpstracker.utils.openFragment
 import com.dscreate_app.gpstracker.utils.showToast
 import com.dscreate_app.gpstracker.viewModels.MainViewModel
 import com.dscreate_app.gpstracker.viewModels.ViewModelFactory
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import org.osmdroid.config.Configuration
 import org.osmdroid.library.BuildConfig
 import org.osmdroid.util.GeoPoint
@@ -110,7 +108,7 @@ class MainFragment : Fragment() {
 
     override fun onPause() {
         super.onPause()
-        // При уходе в другие экраны помечаем совет как просмотренный
+        // При уходе с экрана помечаем совет как просмотренный
         isAdviceDismissedSession = true
     }
 
@@ -155,7 +153,7 @@ class MainFragment : Fragment() {
                     return@observe
                 }
 
-                // Рекорды должны прорываться сквозь флаг закрытия
+                // Рекорды (содержат иконки 🎉, ⚡, 🔥) должны показываться всегда
                 val isRecordAdvice = advice.contains("🎉") || advice.contains("⚡") || advice.contains("🔥")
                 
                 if ((!isAdviceDismissedSession || isRecordAdvice) && !isServiceRunning) {
@@ -171,7 +169,7 @@ class MainFragment : Fragment() {
 
     private fun setupAdviceNavigation(advice: String) {
         binding.adviceCard.setOnClickListener {
-            isAdviceDismissedSession = true // Помечаем как закрытое при клике
+            isAdviceDismissedSession = true 
             when {
                 advice.contains("рекорд") || advice.contains("темп") || advice.contains("прогресс") -> {
                     openFragment(StatisticsFragment())

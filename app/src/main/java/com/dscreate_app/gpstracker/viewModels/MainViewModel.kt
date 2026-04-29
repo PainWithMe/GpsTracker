@@ -72,8 +72,9 @@ class MainViewModel(db: MainDb): ViewModel() {
         "Привет! Твой организм скажет спасибо за активность сегодня.",
         "Погода шепчет: пора выйти на улицу! Что выберешь сегодня, %s?",
         "Каждый шаг приближает тебя к цели. Готов начать, %s?",
-        "Привет, чемпион! Твоя прошлая статистика впечатляет. Попробуем превзойти её?",
-        "Заряд бодрости на весь день начинается с первого шага. Вперёд, %s!"
+        "Привет, чемпион! Твоя статистика впечатляет. Попробуем превзойти её сегодня?",
+        "Заряд бодрости на весь день начинается с первого шага. Вперёд, %s!",
+        "Твоё тело — твой храм. Давай позаботимся о нём сегодня, %s."
     )
 
     private val recordCongratulations = listOf(
@@ -121,15 +122,15 @@ class MainViewModel(db: MainDb): ViewModel() {
             // 1. Проверка на СВЕЖИЙ рекорд (если трек был записан менее 2 минут назад)
             val isJustFinished = (System.currentTimeMillis() - lastTrack.date) < 120000L
             if (isJustFinished) {
-                if (maxDist != null && lastTrack.distance >= maxDist) {
+                if (maxDist != null && lastTrack.distance >= maxDist && lastTrack.distance > 0) {
                     resultAdvice.value = recordCongratulations[0]
                     return
                 }
-                if (maxSpeed != null && lastTrack.speed >= maxSpeed) {
+                if (maxSpeed != null && lastTrack.speed >= maxSpeed && lastTrack.speed > 0) {
                     resultAdvice.value = recordCongratulations[1]
                     return
                 }
-                if (maxCalories != null && lastTrack.calories >= maxCalories) {
+                if (maxCalories != null && lastTrack.calories >= maxCalories && lastTrack.calories > 0) {
                     resultAdvice.value = recordCongratulations[2]
                     return
                 }
@@ -150,15 +151,17 @@ class MainViewModel(db: MainDb): ViewModel() {
                 }
             }
 
-            // 4. Рандомный полезный совет или приветствие
-            val random = Random(System.currentTimeMillis() / 3600000) // Меняем раз в час
-            val choice = random.nextInt(10)
-            if (choice < 7) {
-                val index = random.nextInt(defaultGreetings.size)
-                resultAdvice.value = String.format(defaultGreetings[index], name)
+            // 4. По-настоящему рандомный выбор фразы
+            val choice = Random.nextInt(10)
+            val newAdvice = if (choice < 7) {
+                String.format(defaultGreetings[Random.nextInt(defaultGreetings.size)], name)
             } else {
-                val index = random.nextInt(motivationTips.size)
-                resultAdvice.value = motivationTips[index]
+                motivationTips[Random.nextInt(motivationTips.size)]
+            }
+            
+            // Чтобы не выдавать одну и ту же фразу дважды подряд при обновлении данных
+            if (newAdvice != resultAdvice.value) {
+                resultAdvice.value = newAdvice
             }
         }
 
