@@ -56,6 +56,21 @@ interface Dao {
     @Query("SELECT speed FROM track ORDER BY id DESC LIMIT 1")
     fun getLastTrackSpeed(): Flow<Float?>
 
+    @Query("SELECT COUNT(id) FROM track")
+    fun getTotalTracksCount(): Flow<Int?>
+
+    @Query("SELECT SUM(distance) FROM track WHERE date BETWEEN :start AND :end")
+    fun getDistanceBetweenDates(start: Long, end: Long): Flow<Float?>
+
+    @Query("SELECT COUNT(id) FROM track WHERE strftime('%H', date / 1000, 'unixepoch') BETWEEN '05' AND '10'")
+    fun getMorningTracksCount(): Flow<Int?>
+
+    @Query("SELECT COUNT(id) FROM track WHERE strftime('%H', date / 1000, 'unixepoch') BETWEEN '18' AND '23'")
+    fun getEveningTracksCount(): Flow<Int?>
+
+    @Query("SELECT date FROM track ORDER BY date DESC LIMIT 10")
+    fun getLastTenTrackDates(): Flow<List<Long>>
+
     // Queries for stats by activity type
     @Query("SELECT SUM(distance) FROM track WHERE activity_type = :activityType")
     fun getTotalDistanceByType(activityType: String): Flow<Float?>
@@ -69,7 +84,6 @@ interface Dao {
     @Query("SELECT AVG(speed) FROM track WHERE activity_type = :activityType")
     fun getAverageSpeedByType(activityType: String): Flow<Float?>
 
-    // Queries for personal records by activity type
     @Query("SELECT MAX(distance) FROM track WHERE activity_type = :activityType")
     fun getMaxDistanceByType(activityType: String): Flow<Float?>
 

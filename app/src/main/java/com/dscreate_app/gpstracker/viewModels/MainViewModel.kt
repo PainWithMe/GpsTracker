@@ -4,6 +4,7 @@ import androidx.lifecycle.*
 import com.dscreate_app.gpstracker.database.*
 import com.dscreate_app.gpstracker.location.LocationModel
 import kotlinx.coroutines.launch
+import java.util.*
 import kotlin.random.Random
 
 class MainViewModel(db: MainDb): ViewModel() {
@@ -68,21 +69,11 @@ class MainViewModel(db: MainDb): ViewModel() {
         "Хороший день для прогулки, %s! Какую цель поставим сегодня?",
         "Привет, %s! Твои кроссовки уже заждались тренировки.",
         "Движение — это жизнь. %s, может, пройдем пару километров?",
-        "Как настрой, %s? Сегодня отличный момент, чтобы стать немного сильнее.",
+        "Как настрой, %s? Сегодня отличный момент, чтобы стать сильнее.",
         "Привет! Твой организм скажет спасибо за активность сегодня.",
         "Погода шепчет: пора выйти на улицу! Что выберешь сегодня, %s?",
-        "Каждый шаг приближает тебя к цели. Готов начать, %s?",
-        "Привет, чемпион! Твоя статистика впечатляет. Попробуем превзойти её сегодня?",
-        "Заряд бодрости на весь день начинается с первого шага. Вперёд, %s!",
-        "Твоё тело — твой храм. Давай позаботимся о нём сегодня, %s."
-    )
-
-    private val recordCongratulations = listOf(
-        "Невероятно! Это твой новый рекорд по дистанции! 🎉",
-        "Браво! Ты ещё никогда не двигался так быстро. Максимальная скорость побита! ⚡",
-        "Фантастика! Сегодня ты сжег рекордное количество калорий! 🔥",
-        "Новое достижение! Этот маршрут стал самым длинным в твоей истории. Горжусь тобой!",
-        "Ты в отличной форме! Твой средний темп сегодня просто поражает."
+        "Привет, чемпион! Твоя статистика впечатляет. Попробуем превзойти её?",
+        "Заряд бодрости на весь день начинается с первого шага. Вперёд, %s!"
     )
 
     private val motivationTips = listOf(
@@ -97,19 +88,23 @@ class MainViewModel(db: MainDb): ViewModel() {
         val resultAdvice = MediatorLiveData<String?>()
 
         val lastDateLD = dao.getLastTrackDate().asLiveData()
-        val lastSpeedLD = dao.getLastTrackSpeed().asLiveData()
-        val avgSpeedLD = dao.getAverageSpeed().asLiveData()
+        val totalDistLD = dao.getTotalDistance().asLiveData()
+        val totalCountLD = dao.getTotalTracksCount().asLiveData()
+        val morningCountLD = dao.getMorningTracksCount().asLiveData()
+        val eveningCountLD = dao.getEveningTracksCount().asLiveData()
+        val lastTenDatesLD = dao.getLastTenTrackDates().asLiveData()
         val maxDistLD = dao.getMaxDistance().asLiveData()
         val maxSpeedLD = dao.getMaxSpeed().asLiveData()
-        val maxCaloriesLD = dao.getMaxCalories().asLiveData()
 
         fun update() {
             val lastDate = lastDateLD.value
-            val lastSpeed = lastSpeedLD.value
-            val avgSpeed = avgSpeedLD.value
-            val maxDist = maxDistLD.value
-            val maxSpeed = maxSpeedLD.value
-            val maxCalories = maxCaloriesLD.value
+            val totalDist = totalDistLD.value ?: 0f
+            val totalCount = totalCountLD.value ?: 0
+            val morningCount = morningCountLD.value ?: 0
+            val eveningCount = eveningCountLD.value ?: 0
+            val lastTenDates = lastTenDatesLD.value ?: emptyList()
+            val maxDist = maxDistLD.value ?: 0f
+            val maxSpeed = maxSpeedLD.value ?: 0f
             val currentTracks = tracks.value
 
             if (currentTracks.isNullOrEmpty()) {
@@ -118,59 +113,75 @@ class MainViewModel(db: MainDb): ViewModel() {
             }
 
             val lastTrack = currentTracks.first()
-
-            // 1. Проверка на СВЕЖИЙ рекорд (если трек был записан менее 2 минут назад)
             val isJustFinished = (System.currentTimeMillis() - lastTrack.date) < 120000L
+
+            // 1. Приоритет: Мгновенные поздравления (Рекорды и Юбилеи)
             if (isJustFinished) {
-                if (maxDist != null && lastTrack.distance >= maxDist && lastTrack.distance > 0) {
-                    resultAdvice.value = recordCongratulations[0]
+                if (lastTrack.distance >= maxDist && maxDist > 0) {
+                    resultAdvice.value = "Невероятно! Это твой новый личный рекорд по дистанции! 🎉"
                     return
                 }
-                if (maxSpeed != null && lastTrack.speed >= maxSpeed && lastTrack.speed > 0) {
-                    resultAdvice.value = recordCongratulations[1]
+                if (lastTrack.speed >= maxSpeed && maxSpeed > 0) {
+                    resultAdvice.value = "Браво! Ты ещё никогда не двигался так быстро. Рекорд скорости! ⚡"
                     return
                 }
-                if (maxCalories != null && lastTrack.calories >= maxCalories && lastTrack.calories > 0) {
-                    resultAdvice.value = recordCongratulations[2]
+                if (totalDist > 42195f && totalDist < 43000f) {
+                    resultAdvice.value = "Потрясающе! Твоя общая дистанция превысила 42 км. Ты пробежал МАРАФОН! 🏆"
+                    return
+                }
+                if (totalCount % 10 == 0) {
+                    resultAdvice.value = "Юбилей! Это твоя ${totalCount}-я тренировка. Так держать! 🎊"
                     return
                 }
             }
 
-            // 2. Проверка на долгий перерыв (3 дня)
+            // 2. Дисциплина (перерыв более 3 дней) - показываем всегда, если условие верно
             if (lastDate != null && (System.currentTimeMillis() - lastDate) > 259200000L) {
                 resultAdvice.value = "Мы не тренировались уже несколько дней. Пора размяться, $name!"
                 return
             }
 
-            // 3. Проверка на прогресс скорости
-            if (lastSpeed != null && avgSpeed != null && lastSpeed > avgSpeed) {
-                val diff = (((lastSpeed - avgSpeed) / avgSpeed) * 100).toInt()
-                if (diff > 10) {
-                    resultAdvice.value = "Отличный прогресс! Твой темп вырос на $diff%. Так держать!"
-                    return
+            // 3. Аналитика (Серии или Время суток) - выпадает СЛУЧАЙНО, чтобы не надоедать
+            val randomChoice = Random.nextInt(10)
+            if (randomChoice < 3) { // 30% шанс на глубокую аналитику
+                // Серии
+                if (lastTenDates.size >= 3) {
+                    val cal = Calendar.getInstance()
+                    val days = lastTenDates.map { cal.apply { timeInMillis = it }.get(Calendar.DAY_OF_YEAR) }.distinct().take(3)
+                    if (days.size == 3 && days[0] - days[2] == 2) {
+                        resultAdvice.value = "Ого, ты на волне! 3-й день тренировок подряд. Не останавливайся! 🔥"
+                        return
+                    }
+                }
+                // Время суток
+                if (totalCount >= 5) {
+                    if (morningCount > eveningCount + 3) {
+                        resultAdvice.value = "Ты настоящий жаворонок! Утренние прогулки отлично бодрят. ☀️"
+                        return
+                    } else if (eveningCount > morningCount + 3) {
+                        resultAdvice.value = "Предпочитаешь вечерние прогулки? Это лучший способ снять стресс! 🌙"
+                        return
+                    }
                 }
             }
 
-            // 4. По-настоящему рандомный выбор фразы
-            val choice = Random.nextInt(10)
-            val newAdvice = if (choice < 7) {
-                String.format(defaultGreetings[Random.nextInt(defaultGreetings.size)], name)
-            } else {
+            // 4. Фон: Рандомные приветствия и советы
+            val isTip = Random.nextBoolean()
+            resultAdvice.value = if (isTip) {
                 motivationTips[Random.nextInt(motivationTips.size)]
-            }
-            
-            // Чтобы не выдавать одну и ту же фразу дважды подряд при обновлении данных
-            if (newAdvice != resultAdvice.value) {
-                resultAdvice.value = newAdvice
+            } else {
+                String.format(defaultGreetings[Random.nextInt(defaultGreetings.size)], name)
             }
         }
 
         resultAdvice.addSource(lastDateLD) { update() }
-        resultAdvice.addSource(lastSpeedLD) { update() }
-        resultAdvice.addSource(avgSpeedLD) { update() }
+        resultAdvice.addSource(totalDistLD) { update() }
+        resultAdvice.addSource(totalCountLD) { update() }
+        resultAdvice.addSource(morningCountLD) { update() }
+        resultAdvice.addSource(eveningCountLD) { update() }
+        resultAdvice.addSource(lastTenDatesLD) { update() }
         resultAdvice.addSource(maxDistLD) { update() }
         resultAdvice.addSource(maxSpeedLD) { update() }
-        resultAdvice.addSource(maxCaloriesLD) { update() }
         resultAdvice.addSource(tracks) { update() }
 
         return resultAdvice
