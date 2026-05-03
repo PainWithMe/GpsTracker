@@ -31,6 +31,7 @@ import com.dscreate_app.gpstracker.databinding.FragmentMainBinding
 import com.dscreate_app.gpstracker.location.LocationModel
 import com.dscreate_app.gpstracker.location.LocationService
 import com.dscreate_app.gpstracker.utils.DialogManager
+import com.dscreate_app.gpstracker.utils.NotificationUtils
 import com.dscreate_app.gpstracker.utils.TimeUtils
 import com.dscreate_app.gpstracker.utils.checkPermission
 import com.dscreate_app.gpstracker.utils.openFragment
@@ -49,7 +50,7 @@ class MainFragment : Fragment() {
 
     private var _binding: FragmentMainBinding? = null
     private val binding: FragmentMainBinding
-        get() = _binding ?: throw RuntimeException("FragmentMainBinding is null")
+        get() = _binding ?: throw RuntimeException("FragmentStatisticsBinding is null")
 
     private lateinit var permLauncher: ActivityResultLauncher<Array<String>>
     private var isServiceRunning = false
@@ -65,6 +66,7 @@ class MainFragment : Fragment() {
 
     companion object {
         private var isAdviceDismissedSession = false
+        private var lastNotificationAdvice: String? = null
         private const val SHARED_PREF_TABLE_NAME = "osm_pref"
         private const val SHARED_PREF_COLOR_KEY = "color_key"
         private const val SHARED_PREF_DEF_VALUE = "#03A9F4"
@@ -108,7 +110,6 @@ class MainFragment : Fragment() {
 
     override fun onPause() {
         super.onPause()
-        // При уходе с экрана помечаем совет как просмотренный
         isAdviceDismissedSession = true
     }
 
@@ -153,9 +154,14 @@ class MainFragment : Fragment() {
                     return@observe
                 }
 
-                // Рекорды (содержат иконки 🎉, ⚡, 🔥) должны показываться всегда
                 val isRecordAdvice = advice.contains("🎉") || advice.contains("⚡") || advice.contains("🔥")
-                
+
+                // Если это рекорд и мы еще не показывали уведомление для этой фразы
+                if (isRecordAdvice && advice != lastNotificationAdvice) {
+                    lastNotificationAdvice = advice
+                    NotificationUtils.showCoachNotification(requireContext(), "Новое достижение!", advice)
+                }
+
                 if ((!isAdviceDismissedSession || isRecordAdvice) && !isServiceRunning) {
                     binding.adviceCard.visibility = View.VISIBLE
                     binding.tvAdvice.text = advice
@@ -169,7 +175,7 @@ class MainFragment : Fragment() {
 
     private fun setupAdviceNavigation(advice: String) {
         binding.adviceCard.setOnClickListener {
-            isAdviceDismissedSession = true 
+            isAdviceDismissedSession = true
             when {
                 advice.contains("рекорд") || advice.contains("темп") || advice.contains("прогресс") -> {
                     openFragment(StatisticsFragment())
@@ -183,6 +189,22 @@ class MainFragment : Fragment() {
 
     private fun locationUpdates() = with(binding) {
         viewModel.locationUpdates.observe(viewLifecycleOwner) {
+            if (LocationService.isRunning && !isServiceRunning) {
+                isServiceRunning = true
+                binding.fStartStop.setImageResource(R.drawable.ic_stop)
+                binding.fPause.visibility = View.VISIBLE
+            } else if (!LocationService.isRunning && isServiceRunning) {
+                isServiceRunning = false
+                binding.fStartStop.setImageResource(R.drawable.ic_play)
+                binding.fPause.visibility = View.GONE
+                timer?.cancel()
+            }
+
+            if (isPaused != LocationService.isPaused) {
+                isPaused = LocationService.isPaused
+                updatePauseUI()
+            }
+
             val distance = String.format("%.1f", it.distance / 1000)
             val speed = String.format("%.1f", it.speed)
             val averageSpeed = String.format("%.1f", getAverageSpeed(it.distance))
@@ -197,15 +219,25 @@ class MainFragment : Fragment() {
         }
     }
 
+    private fun updatePauseUI() {
+        if (isPaused) {
+            binding.fPause.setImageResource(R.drawable.ic_play)
+            timer?.cancel()
+        } else {
+            binding.fPause.setImageResource(R.drawable.ic_pause)
+            startTimer()
+        }
+    }
+
     private fun startTimer() {
         timer?.cancel()
         timer = Timer()
         startTime = LocationService.startTime
         timer?.schedule(object : TimerTask() {
             override fun run() {
-              activity?.runOnUiThread {
-                 if (_binding != null) viewModel.timeData.value = getCurrentTime()
-              }
+                activity?.runOnUiThread {
+                    if (_binding != null) viewModel.timeData.value = getCurrentTime()
+                }
             }
         }, 1000, 1000)
     }
@@ -234,7 +266,7 @@ class MainFragment : Fragment() {
     }
 
     private fun updateTime() {
-      viewModel.timeData.observe(viewLifecycleOwner) {
+        viewModel.timeData.observe(viewLifecycleOwner) {
             binding.tvTime.text = it
         }
     }
@@ -253,7 +285,7 @@ class MainFragment : Fragment() {
                 R.id.fStartStop -> { startStopService() }
                 R.id.fCenter -> { centerLocation() }
                 R.id.fPause -> { pauseResumeService() }
-                R.id.btnCloseAdvice -> { 
+                R.id.btnCloseAdvice -> {
                     isAdviceDismissedSession = true
                     binding.adviceCard.visibility = View.GONE
                 }
@@ -272,20 +304,15 @@ class MainFragment : Fragment() {
         if (isServiceRunning) {
             binding.fStartStop.setImageResource(R.drawable.ic_stop)
             binding.fPause.visibility = View.VISIBLE
-            binding.adviceCard.visibility = View.GONE 
-            if (isPaused) {
-                binding.fPause.setImageResource(R.drawable.ic_play)
-            } else {
-                binding.fPause.setImageResource(R.drawable.ic_pause)
-                startTimer()
-            }
+            binding.adviceCard.visibility = View.GONE
+            updatePauseUI()
         }
     }
 
     private fun startStopService() {
         if (!isServiceRunning) {
             startLocService()
-            isAdviceDismissedSession = true 
+            isAdviceDismissedSession = true
             binding.adviceCard.visibility = View.GONE
         } else {
             activity?.stopService(Intent(activity, LocationService::class.java))
@@ -301,8 +328,7 @@ class MainFragment : Fragment() {
                         override fun onClick() {
                             showToast("Маршрут сохранён!")
                             viewModel.insertTrack(track)
-                            // Сбрасываем флаг, чтобы тренер мог сразу поздравить с рекордом
-                            isAdviceDismissedSession = false 
+                            isAdviceDismissedSession = false
                         }
                     })
             }
@@ -316,18 +342,9 @@ class MainFragment : Fragment() {
         val intent = Intent(activity, LocationService::class.java)
         if (!isPaused) {
             intent.action = LocationService.ACTION_PAUSE
-            binding.fPause.setImageResource(R.drawable.ic_play)
-            timer?.cancel()
-            pausedTime = System.currentTimeMillis() - startTime
         } else {
             intent.action = LocationService.ACTION_RESUME
-            binding.fPause.setImageResource(R.drawable.ic_pause)
-            startTime = System.currentTimeMillis() - pausedTime
-            LocationService.startTime = startTime
-            startTimer()
         }
-        isPaused = !isPaused
-        LocationService.isPaused = isPaused
         activity?.startService(intent)
     }
 
@@ -407,15 +424,22 @@ class MainFragment : Fragment() {
     }
 
     private fun registerPermissions() {
-        permLauncher = registerForActivityResult(ActivityResultContracts
-            .RequestMultiplePermissions()) {
+        val permissions = mutableListOf(
+            Manifest.permission.ACCESS_FINE_LOCATION,
+            Manifest.permission.ACCESS_COARSE_LOCATION
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
             if (it[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
                 initOSM()
-                checkLocationEnabled()
             } else {
                 showToast(getString(R.string.toast_need_perm))
             }
         }
+        permLauncher.launch(permissions.toTypedArray())
     }
 
     private fun checkLocationPermission() {
@@ -432,7 +456,6 @@ class MainFragment : Fragment() {
             checkPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
         ) {
             initOSM()
-            checkLocationEnabled()
         } else {
             permLauncher.launch(
                 arrayOf(
@@ -446,23 +469,8 @@ class MainFragment : Fragment() {
     private fun checkPermissionBefore10() {
         if (checkPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
             initOSM()
-            checkLocationEnabled()
         } else {
             permLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
-        }
-    }
-
-    private fun checkLocationEnabled() {
-        val locationManager = activity?.getSystemService(Context.LOCATION_SERVICE) as LocationManager
-        val isEnabled = locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)
-        if (!isEnabled) {
-            DialogManager.showLocEnabledDialog(requireActivity(),
-                object : DialogManager.Listener {
-                    override fun onClick() {
-                        startActivity(Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS))
-                    }
-                }
-            )
         }
     }
 
