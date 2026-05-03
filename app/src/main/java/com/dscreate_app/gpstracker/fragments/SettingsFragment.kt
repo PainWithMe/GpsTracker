@@ -11,6 +11,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.FileProvider
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import com.dscreate_app.gpstracker.R
@@ -48,6 +49,7 @@ class SettingsFragment : PreferenceFragmentCompat() {
         setPreferencesFromResource(R.xml.main_preference, rootKey)
         setupClickListeners()
         observeUserProfile()
+        initFormulaSummary()
     }
 
     private fun observeUserProfile() {
@@ -62,6 +64,16 @@ class SettingsFragment : PreferenceFragmentCompat() {
 
         namePreference?.summary = userProfile.name
         weightPreference?.summary = userProfile.weight.toString()
+    }
+
+    private fun initFormulaSummary() {
+        val formulaPref = findPreference<ListPreference>("calorie_formula_key")
+        formulaPref?.summary = formulaPref?.entry
+        formulaPref?.setOnPreferenceChangeListener { preference, newValue ->
+            val index = (preference as ListPreference).findIndexOfValue(newValue as String)
+            preference.summary = preference.entries[index]
+            true
+        }
     }
 
     private fun setupClickListeners() {
@@ -151,7 +163,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
             inputStream?.close()
 
             if (points.size > 1) {
-                // ПЕРЕД расчетами - сортируем точки по времени, если оно есть
                 val sortedPoints = points.filter { it.time.isNotEmpty() }.sortedBy { it.time }
                 saveImportedTrack(if (sortedPoints.isNotEmpty()) sortedPoints else points, activityName)
             } else {
@@ -169,7 +180,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
             timeZone = TimeZone.getTimeZone("UTC")
         }
 
-        // 1. Рассчитываем дистанцию (уже по отсортированным точкам)
         var totalDistance = 0f
         for (i in 0 until points.size - 1) {
             val results = FloatArray(1)
@@ -181,7 +191,6 @@ class SettingsFragment : PreferenceFragmentCompat() {
             totalDistance += results[0]
         }
 
-        // 2. Рассчитываем время СТРОГО из первой и последней точек
         val firstPointTime = try { 
             if (points.first().time.isNotEmpty()) sdf.parse(points.first().time)?.time ?: System.currentTimeMillis()
             else System.currentTimeMillis()
@@ -194,20 +203,17 @@ class SettingsFragment : PreferenceFragmentCompat() {
         
         var duration = lastPointTime - firstPointTime
         
-        // Защита от слишком маленького времени (если время в файле одинаковое или разница 1 сек)
         if (totalDistance > 10 && duration < 5000) {
-             // Рассчитываем примерное время исходя из 5 км/ч (1.4 м/с)
              duration = ((totalDistance / 1.4f) * 1000).toLong()
         }
         
         if (duration <= 0) duration = 1000
 
-        // 3. Рассчитываем среднюю скорость в м/с
         val avgSpeed = totalDistance / (duration / 1000f)
         
-        // 4. Считаем калории
         val weight = viewModel.userProfile.value?.weight ?: 70.0f
-        val calories = CaloriesUtils.calculate(duration, avgSpeed, weight, activityType)
+        // Используем метод calculateMET для импорта
+        val calories = CaloriesUtils.calculateMET(duration, avgSpeed, weight, activityType)
 
         val track = TrackItem(
             null,

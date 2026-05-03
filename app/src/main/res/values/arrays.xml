@@ -23,4 +23,16 @@
         <item>#36B13B</item>
         <item>#FF000000</item>
     </string-array>
+
+    <string-array name="calorie_formula_name">
+        <item>Стандартная (MET)</item>
+        <item>По дистанции (Упрощенная)</item>
+        <item>Адаптивная (ACSM)</item>
+    </string-array>
+
+    <string-array name="calorie_formula_value">
+        <item>met</item>
+        <item>distance</item>
+        <item>acsm</item>
+    </string-array>
 </resources>

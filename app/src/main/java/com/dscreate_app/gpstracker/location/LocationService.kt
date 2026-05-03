@@ -18,6 +18,7 @@ import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.preference.PreferenceManager
 import com.dscreate_app.gpstracker.MainActivity
 import com.dscreate_app.gpstracker.R
+import com.dscreate_app.gpstracker.utils.CaloriesUtils
 import com.google.android.gms.location.*
 import org.osmdroid.util.GeoPoint
 import java.util.*
@@ -31,6 +32,7 @@ class LocationService : Service() {
     private var calories = 0.0f
     private var weight = 70.0f
     private var activityType = "Ходьба"
+    private var formulaType = "met"
     private lateinit var geoPointsList: ArrayList<GeoPoint>
 
     override fun onBind(intent: Intent?): IBinder? {
@@ -48,6 +50,10 @@ class LocationService : Service() {
             if (it.hasExtra(WEIGHT_KEY)) weight = it.getFloatExtra(WEIGHT_KEY, 70.0f)
             if (it.hasExtra(ACTIVITY_TYPE_KEY)) activityType = it.getStringExtra(ACTIVITY_TYPE_KEY) ?: "Ходьба"
             
+            // Считываем выбранную формулу из настроек
+            val prefs = PreferenceManager.getDefaultSharedPreferences(this)
+            formulaType = prefs.getString("calorie_formula_key", "met") ?: "met"
+
             when (it.action) {
                 ACTION_PAUSE -> {
                     isPaused = true
@@ -82,8 +88,19 @@ class LocationService : Service() {
             val currentLocation = locationResult.lastLocation
             if (lastLocation != null && currentLocation != null) {
                 val timeInMillis = currentLocation.time - lastLocation!!.time
-                distance += lastLocation?.distanceTo(currentLocation) ?: 0.0f
-                calories += calculateCalories(timeInMillis, currentLocation.speed)
+                val stepDistance = lastLocation?.distanceTo(currentLocation) ?: 0.0f
+                distance += stepDistance
+                
+                // Расчет калорий по выбранной формуле
+                calories += when (formulaType) {
+                    "distance" -> CaloriesUtils.calculateByDistance(stepDistance, weight, activityType)
+                    "acsm" -> {
+                        val altitudeDiff = currentLocation.altitude - lastLocation!!.altitude
+                        CaloriesUtils.calculateAdaptive(timeInMillis, currentLocation.speed, weight, activityType, altitudeDiff)
+                    }
+                    else -> CaloriesUtils.calculateMET(timeInMillis, currentLocation.speed, weight, activityType)
+                }
+
                 geoPointsList.add(GeoPoint(currentLocation.latitude, currentLocation.longitude))
 
                 val locModel = LocationModel(
@@ -95,36 +112,6 @@ class LocationService : Service() {
                 sendLocData(locModel)
             }
             lastLocation = currentLocation
-        }
-    }
-
-    private fun calculateCalories(timeInMillis: Long, speed: Float): Float {
-        val hours = timeInMillis / 1000.0f / 3600.0f
-        val met = getMetForActivity(activityType, speed)
-        return (met * weight * hours)
-    }
-
-    private fun getMetForActivity(activity: String, speed: Float): Float {
-        val speedInKmH = speed * 3.6f
-        return when (activity) {
-            "Ходьба" -> when {
-                speedInKmH < 4 -> 2.8f
-                speedInKmH < 6 -> 3.5f
-                else -> 5.0f
-            }
-            "Скандинавская ходьба" -> 4.8f
-            "Бег" -> when {
-                speedInKmH < 8 -> 7.0f
-                speedInKmH < 11 -> 9.8f
-                speedInKmH < 14 -> 12.3f
-                else -> 15.0f
-            }
-            "Велосипед" -> when {
-                speedInKmH < 15 -> 5.8f
-                speedInKmH < 20 -> 8.0f
-                else -> 10.0f
-            }
-            else -> 3.5f
         }
     }
 

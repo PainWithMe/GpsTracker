@@ -16,6 +16,15 @@
             app:icon="@drawable/ic_settings"
             app:summary="Ваш вес" />
 
+        <ListPreference
+            android:defaultValue="met"
+            android:entries="@array/calorie_formula_name"
+            android:entryValues="@array/calorie_formula_value"
+            android:key="calorie_formula_key"
+            android:title="Метод расчета калорий"
+            app:icon="@drawable/ic_settings"
+            app:summary="Выберите алгоритм подсчета энергозатрат" />
+
     </PreferenceCategory>
 
     <PreferenceCategory android:title="@string/location">
