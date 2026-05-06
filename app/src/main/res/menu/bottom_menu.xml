@@ -14,7 +14,7 @@
 
     <item
         android:title="@string/statistics"
-        android:icon="@drawable/list_tracks"
+        android:icon="@drawable/ic_speed"
         android:id="@+id/id_statistics"
         android:orderInCategory="250"/>
 

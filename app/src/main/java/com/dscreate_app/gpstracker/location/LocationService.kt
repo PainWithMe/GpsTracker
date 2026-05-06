@@ -61,14 +61,20 @@ class LocationService : Service() {
                 isPaused = true
                 lastLocation = null
                 updateNotification("Запись приостановлена")
-                sendStateUpdate()
+                sendLocData(LocationModel(0f, distance, geoPointsList, calories))
             }
             ACTION_RESUME -> {
                 isPaused = false
                 updateNotification("Запись возобновлена")
-                sendStateUpdate()
+                sendLocData(LocationModel(0f, distance, geoPointsList, calories))
             }
             ACTION_STOP -> {
+                isRunning = false
+                // Посылаем сигнал AUTO_SAVE через Intent
+                val stopIntent = Intent(LOC_MODEL_INTENT)
+                stopIntent.putExtra(LOC_MODEL_INTENT, LocationModel(0f, distance, geoPointsList, calories))
+                stopIntent.putExtra("ACTION_EXTERNAL_STOP", true)
+                LocalBroadcastManager.getInstance(applicationContext).sendBroadcast(stopIntent)
                 stopSelf()
             }
             else -> {
@@ -79,12 +85,6 @@ class LocationService : Service() {
             }
         }
         return START_STICKY
-    }
-
-    private fun sendStateUpdate() {
-        // Отправляем пустой LocModel чтобы обновить состояние UI во фрагменте
-        val intent = Intent(LOC_MODEL_INTENT)
-        LocalBroadcastManager.getInstance(applicationContext).sendBroadcast(intent)
     }
 
     override fun onDestroy() {
@@ -140,10 +140,10 @@ class LocationService : Service() {
     private fun createNotificationChannels() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val trackerChannel = NotificationChannel(
-                CHANNEL_ID, "GPS Трекер (Активность)", NotificationManager.IMPORTANCE_LOW
+                CHANNEL_ID, "Активность", NotificationManager.IMPORTANCE_LOW
             )
             val coachChannel = NotificationChannel(
-                COACH_CHANNEL_ID, "Виртуальный тренер (Советы)", NotificationManager.IMPORTANCE_DEFAULT
+                COACH_CHANNEL_ID, "Уведомления", NotificationManager.IMPORTANCE_DEFAULT
             )
             val nManager = getSystemService(NotificationManager::class.java) as NotificationManager
             nManager.createNotificationChannel(trackerChannel)
@@ -170,9 +170,10 @@ class LocationService : Service() {
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setSmallIcon(R.mipmap.ic_launcher)
-            .setContentTitle("Gps Tracker в работе")
+            .setContentTitle("Трекер запущен")
             .setContentText(content)
             .setOngoing(true)
+            .setSilent(true)
             .setContentIntent(mainPendingIntent)
             .addAction(pauseAction)
             .addAction(android.R.drawable.ic_menu_close_clear_cancel, "Стоп", stopPendingIntent)

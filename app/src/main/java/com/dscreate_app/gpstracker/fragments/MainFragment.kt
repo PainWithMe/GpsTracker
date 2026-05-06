@@ -50,7 +50,7 @@ class MainFragment : Fragment() {
 
     private var _binding: FragmentMainBinding? = null
     private val binding: FragmentMainBinding
-        get() = _binding ?: throw RuntimeException("FragmentStatisticsBinding is null")
+        get() = _binding ?: throw RuntimeException("FragmentMainBinding is null")
 
     private lateinit var permLauncher: ActivityResultLauncher<Array<String>>
     private var isServiceRunning = false
@@ -154,15 +154,14 @@ class MainFragment : Fragment() {
                     return@observe
                 }
 
-                val isRecordAdvice = advice.contains("🎉") || advice.contains("⚡") || advice.contains("🔥")
-
-                // Если это рекорд и мы еще не показывали уведомление для этой фразы
-                if (isRecordAdvice && advice != lastNotificationAdvice) {
+                val isAchievement = advice.contains("🎉") || advice.contains("⚡") || advice.contains("🏆") || advice.contains("🔥")
+                
+                if (isAchievement && advice != lastNotificationAdvice) {
                     lastNotificationAdvice = advice
-                    NotificationUtils.showCoachNotification(requireContext(), "Новое достижение!", advice)
+                    NotificationUtils.showCoachNotification(requireContext(), "Достижение!", advice)
                 }
 
-                if ((!isAdviceDismissedSession || isRecordAdvice) && !isServiceRunning) {
+                if ((!isAdviceDismissedSession || isAchievement) && !isServiceRunning) {
                     binding.adviceCard.visibility = View.VISIBLE
                     binding.tvAdvice.text = advice
                     setupAdviceNavigation(advice)
@@ -177,7 +176,7 @@ class MainFragment : Fragment() {
         binding.adviceCard.setOnClickListener {
             isAdviceDismissedSession = true
             when {
-                advice.contains("рекорд") || advice.contains("темп") || advice.contains("прогресс") -> {
+                advice.contains("рекорд") || advice.contains("марафон") || advice.contains("неделя") -> {
                     openFragment(StatisticsFragment())
                 }
                 else -> {
@@ -191,18 +190,12 @@ class MainFragment : Fragment() {
         viewModel.locationUpdates.observe(viewLifecycleOwner) {
             if (LocationService.isRunning && !isServiceRunning) {
                 isServiceRunning = true
-                binding.fStartStop.setImageResource(R.drawable.ic_stop)
-                binding.fPause.visibility = View.VISIBLE
-            } else if (!LocationService.isRunning && isServiceRunning) {
-                isServiceRunning = false
-                binding.fStartStop.setImageResource(R.drawable.ic_play)
-                binding.fPause.visibility = View.GONE
-                timer?.cancel()
+                fStartStop.setImageResource(R.drawable.ic_stop)
+                fPause.visibility = View.VISIBLE
             }
 
             if (isPaused != LocationService.isPaused) {
-                isPaused = LocationService.isPaused
-                updatePauseUI()
+                syncPauseState(LocationService.isPaused)
             }
 
             val distance = String.format("%.1f", it.distance / 1000)
@@ -219,14 +212,46 @@ class MainFragment : Fragment() {
         }
     }
 
-    private fun updatePauseUI() {
+    private fun syncPauseState(pause: Boolean) {
+        isPaused = pause
         if (isPaused) {
             binding.fPause.setImageResource(R.drawable.ic_play)
             timer?.cancel()
+            pausedTime = System.currentTimeMillis() - startTime
         } else {
             binding.fPause.setImageResource(R.drawable.ic_pause)
+            startTime = System.currentTimeMillis() - pausedTime
+            LocationService.startTime = startTime
             startTimer()
         }
+    }
+
+    private fun autoSaveTrack(model: LocationModel) {
+        isServiceRunning = false
+        binding.fStartStop.setImageResource(R.drawable.ic_play)
+        binding.fPause.visibility = View.GONE
+        timer?.cancel()
+        
+        val finalTime = if (isPaused) pausedTime else System.currentTimeMillis() - startTime
+        val activityType = binding.spActivityType.selectedItem?.toString() ?: "Ходьба"
+        
+        val track = TrackItem(
+            null,
+            finalTime,
+            TimeUtils.getCurrentTimeInMillis(),
+            model.distance,
+            getAverageSpeed(model.distance),
+            geoPointsToString(model.geoPointsList),
+            activityType,
+            model.calories,
+            userProfile?.weight.toString() ?: "70.0"
+        )
+        
+        viewModel.insertTrack(track)
+        showToast("Маршрут сохранен автоматически!")
+        isAdviceDismissedSession = false
+        isPaused = false
+        pausedTime = 0L
     }
 
     private fun startTimer() {
@@ -305,7 +330,12 @@ class MainFragment : Fragment() {
             binding.fStartStop.setImageResource(R.drawable.ic_stop)
             binding.fPause.visibility = View.VISIBLE
             binding.adviceCard.visibility = View.GONE
-            updatePauseUI()
+            if (isPaused) {
+                binding.fPause.setImageResource(R.drawable.ic_play)
+            } else {
+                binding.fPause.setImageResource(R.drawable.ic_pause)
+                startTimer()
+            }
         }
     }
 
@@ -316,26 +346,24 @@ class MainFragment : Fragment() {
             binding.adviceCard.visibility = View.GONE
         } else {
             activity?.stopService(Intent(activity, LocationService::class.java))
+            isServiceRunning = false
             binding.fStartStop.setImageResource(R.drawable.ic_play)
             binding.fPause.visibility = View.GONE
             timer?.cancel()
+            
             val finalTime = if (isPaused) pausedTime else System.currentTimeMillis() - startTime
             getTrackItem(finalTime)?.let { track ->
-                DialogManager.showSaveDialog(
-                    requireContext(),
-                    track,
-                    object : DialogManager.Listener {
-                        override fun onClick() {
-                            showToast("Маршрут сохранён!")
-                            viewModel.insertTrack(track)
-                            isAdviceDismissedSession = false
-                        }
-                    })
+                DialogManager.showSaveDialog(requireContext(), track, object : DialogManager.Listener {
+                    override fun onClick() {
+                        viewModel.insertTrack(track)
+                        showToast("Маршрут сохранён!")
+                        isAdviceDismissedSession = false
+                    }
+                })
             }
             isPaused = false
             pausedTime = 0L
         }
-        isServiceRunning = !isServiceRunning
     }
 
     private fun pauseResumeService() {
@@ -394,10 +422,6 @@ class MainFragment : Fragment() {
             requireContext(),
             PreferenceManager.getDefaultSharedPreferences(requireContext())
         )
-        val basePath = java.io.File(requireContext().filesDir, "osmdroid")
-        osmConfig.osmdroidBasePath = basePath
-        val tileCache = java.io.File(basePath, "tiles")
-        osmConfig.osmdroidTileCache = tileCache
         osmConfig.userAgentValue = BuildConfig.APPLICATION_ID
     }
 
@@ -424,54 +448,19 @@ class MainFragment : Fragment() {
     }
 
     private fun registerPermissions() {
-        val permissions = mutableListOf(
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.ACCESS_COARSE_LOCATION
-        )
+        val permissions = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(Manifest.permission.POST_NOTIFICATIONS)
         }
-
         permLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
-            if (it[Manifest.permission.ACCESS_FINE_LOCATION] == true) {
-                initOSM()
-            } else {
-                showToast(getString(R.string.toast_need_perm))
-            }
+            if (it[Manifest.permission.ACCESS_FINE_LOCATION] == true) initOSM()
         }
         permLauncher.launch(permissions.toTypedArray())
     }
 
     private fun checkLocationPermission() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            checkPermissionAfter10()
-        } else {
-            checkPermissionBefore10()
-        }
-    }
-
-    @RequiresApi(Build.VERSION_CODES.Q)
-    private fun checkPermissionAfter10() {
-        if (checkPermission(Manifest.permission.ACCESS_FINE_LOCATION) &&
-            checkPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION)
-        ) {
-            initOSM()
-        } else {
-            permLauncher.launch(
-                arrayOf(
-                    Manifest.permission.ACCESS_FINE_LOCATION,
-                    Manifest.permission.ACCESS_BACKGROUND_LOCATION
-                )
-            )
-        }
-    }
-
-    private fun checkPermissionBefore10() {
-        if (checkPermission(Manifest.permission.ACCESS_FINE_LOCATION)) {
-            initOSM()
-        } else {
-            permLauncher.launch(arrayOf(Manifest.permission.ACCESS_FINE_LOCATION))
-        }
+        if (checkPermission(Manifest.permission.ACCESS_FINE_LOCATION)) initOSM()
+        else registerPermissions()
     }
 
     private val receiver = object : BroadcastReceiver() {
@@ -482,15 +471,22 @@ class MainFragment : Fragment() {
                 } else {
                     intent.getSerializableExtra(LocationService.LOC_MODEL_INTENT) as LocationModel
                 }
-                locModel?.let { viewModel.locationUpdates.value = it }
+                
+                locModel?.let { model ->
+                    // Если пришел сигнал на принудительную остановку из шторки
+                    if (intent.getBooleanExtra("ACTION_EXTERNAL_STOP", false)) {
+                        autoSaveTrack(model)
+                    } else {
+                        viewModel.locationUpdates.value = model
+                    }
+                }
             }
         }
     }
 
     private fun registerLocReceiver() {
         val locFilter = IntentFilter(LocationService.LOC_MODEL_INTENT)
-        LocalBroadcastManager.getInstance(requireActivity())
-            .registerReceiver(receiver, locFilter)
+        LocalBroadcastManager.getInstance(requireActivity()).registerReceiver(receiver, locFilter)
     }
 
     private fun addPoint(list: List<GeoPoint>) {
@@ -498,9 +494,7 @@ class MainFragment : Fragment() {
     }
 
     private fun fillPolyLine(list: List<GeoPoint>) {
-        list.forEach {
-            polyLine?.addPoint(it)
-        }
+        list.forEach { polyLine?.addPoint(it) }
     }
 
     private fun updatePolyLine(list: List<GeoPoint>) {
